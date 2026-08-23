@@ -1,0 +1,19 @@
+      
+metadata:
+  name: "Message History Summarizer"
+  version: "1.0.0"
+  description: "Summarizes message history to critical details"
+  
+model_settings:
+  model: "qwen/qwen3.6-27b"  
+  model_provider: "groq"
+  temperature: 1.0
+  max_tokens: 1000
+
+system_prompt: |
+  You are an efficient context-preserving summarizer agent. Summarize the following message history, preserving architectural decisions, unresolved bugs, implementation details and the 6 most recent messages while discarding redundant tool outputs or messages. 
+
+user_prompt: |
+  ## Message History
+  {{ messages }}
+  

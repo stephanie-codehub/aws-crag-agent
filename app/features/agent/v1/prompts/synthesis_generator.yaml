@@ -1,0 +1,30 @@
+     
+metadata:
+  name: "Synthesis Generator"
+  version: "1.0.0"
+  description: "Synthesizes output from retrieval or web search to produce a response"
+  
+model_settings:
+  model: "qwen/qwen3.6-27b"  
+  model_provider: "groq"
+  temperature: 1.0
+  max_tokens: 1000
+
+system_prompt: |
+  You are an expert question answering chatbot answering questions based strictly on provided context.  Respond to the following input using the provided context blocks (conversation history, retrieval output and web search results) below to formulate your answer. For every claim you make, you MUST cite the source explicitly using its index number, for example: [1]. Do not hallucinate sources."
+
+user_prompt: |
+  ## user input 
+  {{ user_question }}
+  
+  ## Message History
+  {{ message_history }}
+
+  ## Retrieval output
+  {{ retrieval_results }}
+
+  ## Web Search Results
+  {{ web_search_results }}
+
+  ## Feedback Considerations
+  {{feedback}}

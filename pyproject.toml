@@ -26,4 +26,5 @@ dependencies = [
 dev = [
     "pre-commit",
     "ruff",
+    "types-pyyaml>=6.0.12.20260815",
 ]
