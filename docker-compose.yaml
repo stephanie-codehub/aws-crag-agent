@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      target: dev 
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app 
+      - /app/.venv  
+    restart: always
+    env_file:
+      - .env
