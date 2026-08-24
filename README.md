@@ -62,13 +62,13 @@ classDef secureStyle fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000;
 
 
 ## Key Features 
-*   **Intent Classifier:** An incoming query router that classifies user intent to optimize downstream token costs and minimize latency.
-*   **Hybrid Search Vector & Keyword Pipeline:** A dual-retrieval strategy combining semantic embeddings (Dense) with exact keyword matching (Sparse / BM25) to eliminate retrieval gaps.
-*   **Incremental Indexing Document Pipeline:** An active ingestion pipeline that tracks ingested documents, avoiding redundant document processing and updating the vector database only when new content is available.
-*   **Corrective RAG (C-RAG) Architecture:** A self-corrective loop that evaluates retrieved document relevance and triggers a web-search fallback if retrieved internal documents are deemed insufficient.
-*   **Input & Output Guardrails:** Ingestion and generation safety nets engineered to enforce data privacy, screen for bias, block prompt injection attempts and block toxic outputs before they reach the user.
-*   **Chainlit UI Frontend:** A streamlined streaming user interface providing real-time visual progress updates of the graph execution alongside interactive source citations.
-*   **Token Streaming:** Optimized token delivery utilizing Server-Sent Events (SSE) to achieve minimal Time-to-First-Token (TTFT).
+*   **Intent Classifier:** An incoming query router that classifies user intent to optimize downstream token costs and minimize latency. [Completed ✅]
+*   **Hybrid Search Vector & Keyword Pipeline:** A dual-retrieval strategy combining semantic embeddings (Dense) with exact keyword matching (Sparse / BM25) to eliminate retrieval gaps. [Completed ✅]
+*   **Incremental Indexing Document Pipeline:** An active ingestion pipeline that tracks ingested documents, avoiding redundant document processing and updating the vector database only when new content is available. [Completed ✅]
+*   **Corrective RAG (C-RAG) Architecture:** A self-corrective loop that evaluates retrieved document relevance and triggers a web-search fallback if retrieved internal documents are deemed insufficient. [In Progress]
+*   **Input & Output Guardrails:** Ingestion and generation safety nets engineered to enforce data privacy, screen for bias, block prompt injection attempts and block toxic outputs before they reach the user. [In Progress]
+*   **Chainlit UI Frontend:** A streamlined streaming user interface providing real-time visual progress updates of the graph execution alongside interactive source citations. [Completed ✅]
+*   **Token Streaming:** Optimized token delivery utilizing Server-Sent Events (SSE) to achieve minimal Time-to-First-Token (TTFT). [Completed ✅]
 
 ## Quick Start (Local Deployment)
 
