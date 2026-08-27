@@ -15,7 +15,7 @@ class IntentSchema(BaseModel):
     intent: UserIntent = Field(
         description="The primary intent category of the user prompt."
         "ERROR_DIAGNOSIS- AWS EC2 questions related to error diagnosis"
-        "PROVISIONING- AWS EC2 questions non reelated to error diagnosis"
+        "PROVISIONING- AWS EC2 questions non related to error diagnosis"
         "general- This includes pleasantries and greetings only"
         "out_of_scope- User query is unrelated to the AWS EC2 domain"
     )
