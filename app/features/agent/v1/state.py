@@ -1,10 +1,11 @@
 from enum import StrEnum, auto
-from typing import Literal, TypedDict
+from typing import Annotated, Literal
 
-from langgraph.graph import MessagesState
+from langgraph.graph.message import add_messages
+from pydantic import BaseModel, Field
 
 
-class OutputFeedback:
+class OutputFeedback(BaseModel):
     guardrail: Literal[
         "PII_sensitive_data", "toxicity_bias", "hallucination", "internal_architecture"
     ]
@@ -16,13 +17,13 @@ class UserIntent(StrEnum):
     OUT_OF_SCOPE = auto()
 
 
-class DocumentWithSource(TypedDict):
+class DocumentWithSource(BaseModel):
     content: str
     file: str
     page: int
 
 
-class GraphState(MessagesState):
+class GraphState(BaseModel):
     user_question: str
     is_input_safe: bool
     intent: UserIntent
@@ -34,3 +35,4 @@ class GraphState(MessagesState):
     synthesis_response: str
     is_output_safe: bool
     output_guardrail_feedback: list[OutputFeedback]
+    messages: Annotated[list, add_messages] = Field(default_factory=list)

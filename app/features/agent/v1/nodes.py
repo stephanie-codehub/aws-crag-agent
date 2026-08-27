@@ -26,9 +26,9 @@ class RewrittenQueryOutput(BaseModel):
 
 async def intent_classifier_node(state: GraphState):
     """Classify the user's intent as one of the UserIntent Enum values."""
-
+    prompt_input = {"user_question": state.user_question}
     prompt_content = get_prompt_content(
-        prompt_name="intent_classifier", variables={"input": state["user_question"]}
+        prompt_name="intent_classifier", variables=prompt_input
     )
     llm = create_llm_client(prompt_content.model_settings)
     messages = [
@@ -43,15 +43,15 @@ async def intent_classifier_node(state: GraphState):
 async def generator_node(state: GraphState):
     """Synthesizes tool outputs to generate the assistant's response."""
 
-    chain_input = {
-        "user_question": state["user_question"],
-        "message_history": state["messages"],
-        "retrieval_results": state.get("retrieval_results", ""),
-        "web_search_results": state.get("web_search_results", ""),
-        "feedback": state.get("output_guardrail_feedback", ""),
+    prompt_input = {
+        "user_question": state.user_question,
+        "message_history": state.messages,
+        "retrieval_results": state.retrieval_results,
+        "web_search_results": state.web_search_results,
+        "feedback": state.output_guardrail_feedback,
     }
     prompt_content = get_prompt_content(
-        prompt_name="synthesis_generator", variables=chain_input
+        prompt_name="synthesis_generator", variables=prompt_input
     )
     llm = create_llm_client(prompt_content.model_settings)
     messages = [
@@ -84,7 +84,7 @@ async def fallback_node(state: GraphState) -> dict:
     """
     FALLBACK_MESSAGE = (
         "Your query is currently outside my capabilities, however, "
-        "I can provide information on pet adoption or pet care."
+        "I can provide assistance with AWS EC2 code provisioning, validation and error diagnosis."
     )
     return {
         "synthesis_response": FALLBACK_MESSAGE,
