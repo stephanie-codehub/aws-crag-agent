@@ -19,10 +19,17 @@ jobs:
           enable-cache: true
 
 
-      - name: Run Linter
-        run: uvx ruff check .
-   
+      - name: Set up Python
+        run: uv python install 3.12
 
-      - name: Run Formatter 
-        run: uvx ruff format --check .
+   
+      - name: Install Dependencies
+        run: uv sync --frozen
+
+    
+      - name: Run Linter
+        run: uv run ruff check .
+
+      - name: Run Formatter Check
+        run: uv run ruff format --check .
 
