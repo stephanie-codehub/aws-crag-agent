@@ -1,6 +1,7 @@
 from langgraph.graph import END
 
-from app.features.agent.v1.state import GraphState, UserIntent
+from app.features.agent.v1.schemas import UserIntent
+from app.features.agent.v1.state import GraphState
 
 
 def is_input_safe_router(state: GraphState):

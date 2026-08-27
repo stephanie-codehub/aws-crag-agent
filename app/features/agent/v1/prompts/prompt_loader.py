@@ -5,7 +5,7 @@ import yaml
 from jinja2 import Template
 
 from app.core.config import settings
-from app.features.agent.v1.schemas.prompt_template import PromptTemplateSchema
+from app.features.agent.v1.prompts.schemas import PromptTemplateSchema
 
 
 @lru_cache(maxsize=32)

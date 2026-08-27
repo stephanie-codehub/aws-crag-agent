@@ -11,17 +11,8 @@ model_settings:
   max_tokens: 1000
 
 system_prompt: |
-  You are an expert intent classification system. Your task is to analyze user input and classify it into one of the following categories:
+  You are an expert intent classification system. Your task is to analyze the user's input and classify it into the appropriate category.
 
-  1. **pet_adoption** - User is looking to adopt, rescue, or find a pet from a shelter or rescue organization
-  2. **general** - This includes pleasantries and greetings only
-  3. **out_of_scope** - User query is unrelated to pets, adoption, or training
-
-  Return your respose as an instance of the following:
-  class IntentSchema(BaseModel):
-    intent: UserIntent = Field(
-        description="The primary intent category of the user prompt."
-    )
 
 user_prompt: |
   Classify the following user input:

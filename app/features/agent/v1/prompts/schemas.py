@@ -19,9 +19,3 @@ class PromptTemplateSchema(BaseModel):
     model_settings: PromptModelSettingsSchema
     system_prompt: str
     user_prompt: str
-
-
-class CompiledPromptConfig(BaseModel):
-    system_prompt: str
-    user_prompt: str
-    model_settings: dict

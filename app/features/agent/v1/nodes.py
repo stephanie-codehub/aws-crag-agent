@@ -2,31 +2,22 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
-from pydantic import BaseModel, Field
 
 from app.features.agent.v1.llm import create_llm_client
 from app.features.agent.v1.prompts.prompt_loader import get_prompt_content
-from app.features.agent.v1.state import GraphState, UserIntent
-
-
-class IntentSchema(BaseModel):
-    intent: UserIntent = Field(
-        description="The primary intent category of the user prompt."
-    )
-
-
-class RewrittenQueryOutput(BaseModel):
-    rag_query: str = Field(
-        description="Optimized keyword string explicitly tuned for semantic matching inside a local vector database."
-    )
-    web_search_query: str = Field(
-        description="Concise keyword query optimized for fetching current, real-time data from an open internet search engine."
-    )
+from app.features.agent.v1.schemas import (
+    IntentSchema,
+)
+from app.features.agent.v1.state import (
+    GraphState,
+)
 
 
 async def intent_classifier_node(state: GraphState):
     """Classify the user's intent as one of the UserIntent Enum values."""
+
     prompt_input = {"user_question": state.user_question}
+
     prompt_content = get_prompt_content(
         prompt_name="intent_classifier", variables=prompt_input
     )
@@ -50,6 +41,7 @@ async def generator_node(state: GraphState):
         "web_search_results": state.web_search_results,
         "feedback": state.output_guardrail_feedback,
     }
+
     prompt_content = get_prompt_content(
         prompt_name="synthesis_generator", variables=prompt_input
     )

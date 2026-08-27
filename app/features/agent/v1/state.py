@@ -1,26 +1,9 @@
-from enum import StrEnum, auto
-from typing import Annotated, Literal
+from typing import Annotated
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-
-class OutputFeedback(BaseModel):
-    guardrail: Literal[
-        "PII_sensitive_data", "toxicity_bias", "hallucination", "internal_architecture"
-    ]
-    reason: str
-
-
-class UserIntent(StrEnum):
-    GENERAL = auto()
-    OUT_OF_SCOPE = auto()
-
-
-class DocumentWithSource(BaseModel):
-    content: str
-    file: str
-    page: int
+from app.features.agent.v1.schemas import DocumentWithSource, OutputFeedback, UserIntent
 
 
 class GraphState(BaseModel):
