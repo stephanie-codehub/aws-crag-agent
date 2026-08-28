@@ -1,6 +1,5 @@
-from langchain.chat_models import init_chat_model
-
 from app.features.agent.v1.schemas.prompt_template import PromptModelSettingsSchema
+from langchain.chat_models import init_chat_model
 
 
 def create_llm_client(prompt_model_settings: PromptModelSettingsSchema):
