@@ -15,7 +15,7 @@ async def on_chat_start():
 
 
 async def ask_agent(prompt: str, session_id: uuid.UUID):
-    cb = cl.LangchainCallbackHandler(stream_final_answer=True)
+    # cb = cl.LangchainCallbackHandler(stream_final_answer=True)
 
     res = cl.Message(content="")
     status_step = cl.Step(name="Thinking...", show_input=False)
