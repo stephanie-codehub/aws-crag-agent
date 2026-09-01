@@ -1,5 +1,6 @@
 """Node implementations used by the agent StateGraph."""
 
+from app.core.utils import log_node_status
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 
@@ -33,7 +34,7 @@ async def intent_classifier_node(state: GraphState):
 
 async def generator_node(state: GraphState):
     """Synthesizes tool outputs to generate the assistant's response."""
-
+    log_node_status("Generating response")
     prompt_input = {
         "user_question": state.user_question,
         "message_history": state.messages,
@@ -57,14 +58,14 @@ async def generator_node(state: GraphState):
 
 async def input_guardrail_node(state: GraphState):
     """Input guardrail node that validates user input."""
-
+    log_node_status("Verifying safety")
     is_input_safe = True
     return {"is_input_safe": is_input_safe}
 
 
 async def output_guardrail_node(state: GraphState):
     """Simple output guardrail node that checks model output safety."""
-
+    log_node_status("Verifying AI safety")
     is_output_safe = True
     return {"is_output_safe": is_output_safe}
 

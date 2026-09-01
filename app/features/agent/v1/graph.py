@@ -2,7 +2,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -50,9 +50,11 @@ async def invoke_agent(
 
 
 async def stream_agent(
-    user_question: str, session_id: uuid.UUID, callbacks: list[Any] | None = None
-) -> AsyncGenerator[str, None]:
-
+    user_question: str,
+    session_id: uuid.UUID,
+    callbacks: list[Any] | None = None,
+    with_status: bool = False,
+) -> AsyncGenerator[dict[str, str], None]:
     config: RunnableConfig = {
         "configurable": {"thread_id": str(session_id)},
     }
@@ -64,11 +66,19 @@ async def stream_agent(
         "messages": [HumanMessage(content=user_question)],
     }
 
-    async for chunk in workflow.astream(
+    stream_modes = ["messages"]
+    if with_status:
+        stream_modes.append("custom")
+
+    async for chunk_type, chunk_data in workflow.astream(
         input=inputs,
         config=config,
-        stream_mode="messages",
+        stream_mode=stream_modes,
     ):
-        msg, _ = chunk
-        if isinstance(msg, BaseMessage) and msg.content:
-            yield str(msg.content)
+        if chunk_type == "messages":
+            msg, _ = chunk_data
+            if isinstance(msg, AIMessageChunk) and msg.content:
+                yield {"type": "token", "content": str(msg.content)}
+
+        elif chunk_type == "custom":
+            yield {"type": "status", "content": str(chunk_data)}

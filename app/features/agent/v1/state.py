@@ -8,14 +8,14 @@ from app.features.agent.v1.schemas import DocumentWithSource, OutputFeedback, Us
 
 class GraphState(BaseModel):
     user_question: str
-    is_input_safe: bool
-    intent: UserIntent
-    rewritten_user_question: str
-    is_retrieval_sufficient: bool
-    retrieval_results: str
-    documents_with_sources: list[DocumentWithSource]
-    web_search_results: str
-    synthesis_response: str
-    is_output_safe: bool
-    output_guardrail_feedback: list[OutputFeedback]
+    is_input_safe: bool | None = None
+    intent: UserIntent | None = None
+    rewritten_user_question: str | None = None
+    is_retrieval_sufficient: bool | None = None
+    retrieval_results: str | None = None
+    documents_with_sources: list[DocumentWithSource] | None = None
+    web_search_results: str | None = None
+    synthesis_response: str | None = None
+    is_output_safe: bool | None = None
+    output_guardrail_feedback: list[OutputFeedback] | None = None
     messages: Annotated[list, add_messages] = Field(default_factory=list)

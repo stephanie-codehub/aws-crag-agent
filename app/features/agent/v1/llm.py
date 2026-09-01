@@ -1,4 +1,4 @@
-from app.features.agent.v1.schemas.prompt_template import PromptModelSettingsSchema
+from app.features.agent.v1.prompts.schemas import PromptModelSettingsSchema
 from langchain.chat_models import init_chat_model
 
 

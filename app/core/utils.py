@@ -1,9 +1,12 @@
 import uuid
+from langgraph.config import get_stream_writer
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
-
+import structlog
 from app.core.exceptions import ResourceNotFoundException
+
+logger = structlog.get_logger()
 
 templates = Jinja2Templates(directory="templates/email")
 PRODUCT_NAME = "Cuomo"
@@ -34,3 +37,13 @@ def validate_resource_ownership(
 ):
     if current_user_id != resource_user_id:
         raise ResourceNotFoundException()
+
+
+def log_node_status(message: str):
+    """Global helper to emit graph status messages."""
+    try:
+        writer = get_stream_writer()
+        if writer:
+            writer(message)
+    except Exception:
+        logger.exception("Error getting Langgraph stream writer")
