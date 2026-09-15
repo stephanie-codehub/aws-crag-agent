@@ -22,10 +22,15 @@ class AppSettings(BaseSettings):
     )
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    documents_folder: str = "knowledge_base"
+    documents_folder: DirectoryPath = Field(
+        default_factory=lambda: BASE_DIR / "knowledge_base"
+    )
+    documents_github_user: str
+    documents_github_repo: str
+    documents_github_branch: str
     vector_collection_name: str = "aws_ec2_documentation"
     vector_db_type: str = "pgvector"
-    record_manager_db_path: str = "sqlite:///vectordb/record_manager_cache.sql"
+    record_manager_db_path: str = "sqlite:///record_manager_cache.sql"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

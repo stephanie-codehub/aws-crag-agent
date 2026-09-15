@@ -23,3 +23,10 @@ class ApiErrorResponse(BaseModel):
     success: bool = False
     message: str
     errors: dict | None = None
+
+
+class PaginatedData[T](BaseModel):
+    items: list[T]
+    total: int
+    page: int
+    size: int
