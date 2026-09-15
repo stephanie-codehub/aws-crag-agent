@@ -1,7 +1,7 @@
 import structlog
+from app.features.agent.v1.retriever.vector_db import hybrid_retriever
 from langchain_tavily import TavilySearch
 
-from app.features.agent.v1.retriever.vector_db import hybrid_retriever
 from app.features.agent.v1.schemas import DocumentWithSource
 
 tavily_web_search = TavilySearch(max_results=3, search_depth="basic")
