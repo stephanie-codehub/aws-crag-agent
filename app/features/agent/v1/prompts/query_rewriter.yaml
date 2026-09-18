@@ -5,7 +5,7 @@ metadata:
   description: "Rewrites the conversation history and the user's current query into an optimized standalone query for RAG retrieval and web search" 
   
 model_settings:
-  model: "qwen/qwen3.6-27b"  
+  model: "qwen/qwen3.8-27b"  
   model_provider: "groq"
   temperature: 1.0
   max_tokens: 1000

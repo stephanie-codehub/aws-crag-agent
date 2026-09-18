@@ -5,7 +5,7 @@ metadata:
   description: "Summarizes message history to critical details"
   
 model_settings:
-  model: "qwen/qwen3.6-27b"  
+  model: "qwen/qwen3.8-27b"  
   model_provider: "groq"
   temperature: 1.0
   max_tokens: 1000
