@@ -9,44 +9,50 @@ import io
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import httpx
 import structlog
-from docling.datamodel.base_models import DocumentStream
-from docling.document_converter import DocumentConverter
-from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from langchain_classic.indexes import SQLRecordManager, index
+from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_core.documents import Document
-from sqlalchemy import create_engine
+from langchain_text_splitters import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
+from markitdown import MarkItDown
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database.session import sync_engine
 from app.features.documents.v1.models import IndexStatRecord
-from app.features.documents.v1.retriever.vector_db import vector_store
+from app.features.documents.v1.retriever.vector_db import sync_vector_store
 from app.features.documents.v1.schemas.enums import IndexingStatus
 
-db_url = settings.sqlalchemy_database_url.get_secret_value().replace(
-    "postgresql+asyncpg://", "postgresql+psycopg2://"
-)
+KEY_ENCODER: Literal["sha256"] = "sha256"
+db_url = settings.sync_database_url.get_secret_value()
 
-sync_engine = create_engine(
-    db_url,
-    echo=False,
-    pool_size=5,
-    max_overflow=10,
-)
-
+TEXT_EXTENSIONS = {".md", ".txt", ".markdown", ".csv"}
 logger = structlog.get_logger()
 embedding_model = settings.embedding_model
 vector_collection_name = settings.vector_collection_name
 vector_db_type = settings.vector_db_type
-RECORD_DB_PATH = settings.record_manager_db_path
 
-tokenizer = HuggingFaceTokenizer.from_pretrained(embedding_model)
-chunker = HybridChunker(tokenizer=tokenizer)
-converter = DocumentConverter()
+
+headers_to_split_on = [
+    ("#", "Header_1"),
+    ("##", "Header_2"),
+    ("###", "Header_3"),
+]
+header_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000, chunk_overlap=150, separators=["\n\n", "\n|", "\n", " "]
+)
+
+
+embeddings = FastEmbedEmbeddings(model_name=embedding_model)
+markitdown = MarkItDown()
 
 
 def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
@@ -61,7 +67,7 @@ def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
         job_id: Unique identifier for the indexing job tracked in the database.
     """
     record_manager = SQLRecordManager(
-        namespace=f"{vector_db_type}/{vector_collection_name}", db_url=RECORD_DB_PATH
+        namespace=f"{vector_db_type}/{vector_collection_name}", db_url=db_url
     )
     record_manager.create_schema()
     total_stats = {"num_added": 0, "num_updated": 0, "num_skipped": 0, "num_deleted": 0}
@@ -92,43 +98,47 @@ def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
             file_paths = [path for path in folder.iterdir() if path.is_file()]
 
             for file_path in file_paths:
-                source_id = f"local:{file_path.name}"
+                source_id = file_path.name
                 active_sources.add(source_id)
+                file_extension = file_path.suffix
 
-                result = converter.convert(file_path)
-                chunks = chunker.chunk(result.document)
-                document_chunks = []
+                if file_extension in TEXT_EXTENSIONS:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                        text_content = f.read()
+                else:
+                    result = markitdown.convert(file_path)
+                    text_content = result.text_content
 
-                for chunk in chunks:
-                    meta = chunk.meta.model_dump()
-                    metadata = {
+                section_chunks = header_splitter.split_text(text_content)
+
+                for section_chunk in section_chunks:
+                    metadata = section_chunk.metadata
+                    cleaned_metadata = {
                         k: v
-                        for k, v in meta.items()
+                        for k, v in metadata.items()
                         if isinstance(v, (str, int, float, bool))
                     }
-                    metadata["source"] = source_id
+                    cleaned_metadata["source"] = source_id
+                    section_chunk.metadata.update(cleaned_metadata)
 
-                    document_chunk = Document(
-                        page_content=chunker.contextualize(chunk), metadata=metadata
-                    )
-                    document_chunks.append(document_chunk)
+                document_chunks = text_splitter.split_documents(section_chunks)
 
                 if document_chunks:
                     stats = index(
                         document_chunks,
                         record_manager,
-                        vector_store,
+                        sync_vector_store,
                         cleanup="incremental",
                         source_id_key="source",
+                        key_encoder=KEY_ENCODER,
                     )
                     for k in total_stats:
                         total_stats[k] += cast(int, stats.get(k, 0))
 
-                del result
                 del document_chunks
                 gc.collect()
 
-            # Identify deleted/stale local files
+            # Identify deleted local files
             all_tracked_keys = record_manager.list_keys(limit=10000)
             all_tracked_sources = {
                 key.split(":")[0] for key in all_tracked_keys if ":" in key
@@ -146,9 +156,10 @@ def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
                     deletion_stats = index(
                         [dummy_doc],
                         record_manager=record_manager,
-                        vector_store=vector_store,
+                        vector_store=sync_vector_store,
                         cleanup="incremental",
                         source_id_key="source",
+                        key_encoder=KEY_ENCODER,
                     )
                     total_stats["num_deleted"] += deletion_stats.get("num_deleted", 0)
 
@@ -183,7 +194,7 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
     """
     record_manager = SQLRecordManager(
         namespace=f"{vector_db_type}/{vector_collection_name}",
-        db_url=RECORD_DB_PATH,
+        db_url=db_url,
     )
     record_manager.create_schema()
 
@@ -215,6 +226,9 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
                 for item in repo_tree.get("tree", []):
                     file_path_str = item["path"]
                     file_name = file_path_str.split("/")[-1]
+                    file_extension = (
+                        f".{file_name.split('.')[-1]}" if "." in file_name else ""
+                    )
 
                     if item["type"] == "blob" and file_path_str.endswith(
                         (".md", ".pdf")
@@ -226,35 +240,34 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
                         file_response = client.get(raw_url)
 
                         file_bytes = io.BytesIO(file_response.content)
-                        doc_stream = DocumentStream(name=file_name, stream=file_bytes)
 
-                        result = converter.convert(doc_stream)
-                        chunks = chunker.chunk(result.document)
-                        document_chunks = []
+                        result = markitdown.convert_stream(
+                            file_bytes, file_extension=file_extension
+                        )
+                        section_chunks = header_splitter.split_text(result.text_content)
 
-                        for chunk in chunks:
-                            meta = chunk.meta.model_dump()
-                            metadata = {
+                        for section_chunk in section_chunks:
+                            metadata = section_chunk.metadata
+                            cleaned_metadata = {
                                 k: v
-                                for k, v in meta.items()
+                                for k, v in metadata.items()
                                 if isinstance(v, (str, int, float, bool))
                             }
-                            metadata["source"] = source_id
-                            metadata["github_sha"] = item["sha"]
+                            cleaned_metadata["source"] = source_id
+                            cleaned_metadata["github_sha"] = item["sha"]
 
-                            document_chunk = Document(
-                                page_content=chunker.contextualize(chunk),
-                                metadata=metadata,
-                            )
-                            document_chunks.append(document_chunk)
+                            section_chunk.metadata.update(cleaned_metadata)
+
+                        document_chunks = text_splitter.split_documents(section_chunks)
 
                         if document_chunks:
                             stats = index(
                                 document_chunks,
                                 record_manager,
-                                vector_store,
+                                sync_vector_store,
                                 cleanup="incremental",
                                 source_id_key="source",
+                                key_encoder=KEY_ENCODER,
                             )
                             for k in total_stats:
                                 total_stats[k] += cast(int, stats.get(k, 0))
@@ -280,9 +293,10 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
                     deletion_stats = index(
                         [dummy_doc],
                         record_manager=record_manager,
-                        vector_store=vector_store,
+                        vector_store=sync_vector_store,
                         cleanup="incremental",
                         source_id_key="source",
+                        key_encoder=KEY_ENCODER,
                     )
                     total_stats["num_deleted"] += deletion_stats.get("num_deleted", 0)
 

@@ -1,8 +1,8 @@
 import structlog
-from app.features.agent.v1.retriever.vector_db import hybrid_retriever
 from langchain_tavily import TavilySearch
 
 from app.features.agent.v1.schemas import DocumentWithSource
+from app.features.documents.v1.retriever.vector_db import vector_store
 
 tavily_web_search = TavilySearch(max_results=3, search_depth="basic")
 
@@ -39,7 +39,11 @@ async def retriever_tool(user_question: str):
     formatted_context_list = []
     documents_with_sources = []
 
-    documents = await hybrid_retriever.ainvoke(user_question)
+    documents = await vector_store.asimilarity_search(
+        query=user_question,
+        k=5,
+        search_type="hybrid",
+    )
 
     for index, d in enumerate(documents):
         file = d.metadata.get("source", f"Source  {index}")

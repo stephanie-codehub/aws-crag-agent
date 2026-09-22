@@ -14,7 +14,8 @@ class AppSettings(BaseSettings):
     allowed_hosts: list[str] = ["*"]
     allowed_origins: list[str] = ["*"]
 
-    sqlalchemy_database_url: SecretStr
+    async_database_url: SecretStr
+    sync_database_url: SecretStr
 
     groq_api_key: SecretStr
     prompts_dir: DirectoryPath = Field(

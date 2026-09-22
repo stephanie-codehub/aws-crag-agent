@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.features.chats.v1.schemas.enums import IndexingStatus
+from app.features.documents.v1.schemas.enums import IndexingStatus
 
 
 class IndexStat(BaseModel):
