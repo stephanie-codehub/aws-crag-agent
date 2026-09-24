@@ -21,6 +21,5 @@ vector_store = PGVectorStore(
 index = VectorStoreIndex.from_vector_store(vector_store, embed_model=embeddings)
 
 hybrid_retriever = index.as_retriever(
-    vector_store_query_mode="hybrid",
-    similarity_top_k=5,
+    vector_store_query_mode="hybrid", similarity_top_k=5, hybrid_top_k=5
 )

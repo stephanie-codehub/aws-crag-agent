@@ -16,6 +16,7 @@ from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.storage.docstore.postgres import PostgresDocumentStore
+from llama_index.storage.kvstore.postgres import PostgresKVStore
 from markitdown import MarkItDown
 from sqlalchemy.orm import Session
 
@@ -41,15 +42,12 @@ text_splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=150)
 embeddings = FastEmbedEmbedding(model_name=embedding_model)
 markitdown = MarkItDown()
 
-from llama_index.storage.kvstore.postgres import PostgresKVStore
 
-# 1. Instantiate the underlying KV store directly
 kv_store = PostgresKVStore.from_uri(
     uri=db_url,
     table_name="ingestion_store",
 )
 
-# 2. Pass the kv_store instance into PostgresDocumentStore
 docstore = PostgresDocumentStore(postgres_kvstore=kv_store)
 
 pipeline = IngestionPipeline(
