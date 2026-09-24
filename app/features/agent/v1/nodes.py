@@ -12,6 +12,7 @@ from app.features.agent.v1.schemas import (
 from app.features.agent.v1.state import (
     GraphState,
 )
+from app.features.agent.v1.tools import retriever_tool
 
 
 async def intent_classifier_node(state: GraphState):
@@ -30,6 +31,27 @@ async def intent_classifier_node(state: GraphState):
     structured_llm = llm.with_structured_output(IntentSchema)
     response = await structured_llm.ainvoke(messages)
     return {"intent": response.intent}
+
+
+async def query_rewriter_node(state: GraphState):
+    log_node_status("Optimizing query for RAG")
+
+    prompt_input = {
+        "user_question": state.user_question,
+        "message_history": state.messages,
+    }
+
+    prompt_content = get_prompt_content(
+        prompt_name="query_rewriter", variables=prompt_input
+    )
+    llm = create_llm_client(prompt_content.model_settings)
+    messages = [
+        SystemMessage(content=prompt_content.system_prompt),
+        HumanMessage(content=prompt_content.user_prompt),
+    ]
+    generator_chain = llm | StrOutputParser()
+    response = await generator_chain.ainvoke(messages)
+    return {"rewritten_user_question": response}
 
 
 async def generator_node(state: GraphState):
@@ -54,6 +76,17 @@ async def generator_node(state: GraphState):
     generator_chain = llm | StrOutputParser()
     response = await generator_chain.ainvoke(messages)
     return {"synthesis_response": response, "messages": [AIMessage(content=response)]}
+
+
+async def retriever_node(state: GraphState):
+    log_node_status("Performing RAG lookup")
+    documents_with_sources, documents_with_sources_formatted_str = await retriever_tool(
+        state.rewritten_user_question or ""
+    )
+    return {
+        "retrieval_results": documents_with_sources_formatted_str,
+        "documents_with_sources": documents_with_sources,
+    }
 
 
 async def input_guardrail_node(state: GraphState):
@@ -90,5 +123,7 @@ nodes = [
     intent_classifier_node,
     output_guardrail_node,
     fallback_node,
+    retriever_node,
+    query_rewriter_node,
     generator_node,
 ]

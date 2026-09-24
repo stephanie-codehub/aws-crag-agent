@@ -15,26 +15,24 @@ async def on_chat_start():
 
 
 async def ask_agent(prompt: str, session_id: uuid.UUID):
-    # cb = cl.LangchainCallbackHandler(stream_final_answer=True)
+    cb = cl.LangchainCallbackHandler(stream_final_answer=True)
 
     res = cl.Message(content="")
-    status_step = cl.Step(name="Thinking...", show_input=False)
-    await status_step.send()
 
-    async for chunk in stream_agent(
-        user_question=prompt, session_id=session_id, with_status=True
-    ):
-        if chunk["type"] == "status":
-            status_step.name = f"{chunk['content']}..."
-            await status_step.update()
+    async with cl.Step(name="Thinking...", show_input=False) as status_step:
+        async for chunk in stream_agent(
+            user_question=prompt,
+            session_id=session_id,
+            with_status=True,
+            callbacks=[cb],
+        ):
+            if chunk["type"] == "status":
+                status_step.name = f"{chunk['content']}..."
+                await status_step.update()
 
-        elif chunk["type"] == "token":
-            if status_step:
-                status_step.status = "done"
+            elif chunk["type"] == "token":
                 await status_step.remove()
-                status_step = None
-
-            await res.stream_token(chunk["content"])
+                await res.stream_token(chunk["content"])
 
     await res.send()
 

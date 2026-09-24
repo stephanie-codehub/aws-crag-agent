@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -23,6 +23,8 @@ for node in nodes:
 graph.add_edge(START, "input_guardrail_node")
 graph.add_conditional_edges("input_guardrail_node", is_input_safe_router)
 graph.add_conditional_edges("intent_classifier_node", intent_router)
+graph.add_edge("query_rewriter_node", "retriever_node")
+graph.add_edge("retriever_node", "generator_node")
 graph.add_edge("generator_node", "output_guardrail_node")
 graph.add_conditional_edges("output_guardrail_node", is_output_safe_router)
 graph.add_edge("fallback_node", END)
@@ -66,7 +68,11 @@ async def stream_agent(
         "messages": [HumanMessage(content=user_question)],
     }
 
-    stream_modes = ["messages"]
+    stream_modes: list[
+        Literal[
+            "values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"
+        ]
+    ] = ["messages"]
     if with_status:
         stream_modes.append("custom")
 

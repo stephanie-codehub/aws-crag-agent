@@ -40,4 +40,3 @@ class OutputFeedback(BaseModel):
 class DocumentWithSource(BaseModel):
     content: str
     file: str
-    page: int

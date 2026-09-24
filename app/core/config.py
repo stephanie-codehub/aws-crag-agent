@@ -22,7 +22,7 @@ class AppSettings(BaseSettings):
         default_factory=lambda: BASE_DIR / "features" / "agent" / "v1" / "prompts"
     )
 
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
     documents_folder: DirectoryPath = Field(
         default_factory=lambda: BASE_DIR / "knowledge_base"
     )
@@ -31,7 +31,6 @@ class AppSettings(BaseSettings):
     documents_github_branch: str
     vector_collection_name: str = "aws_ec2_documentation"
     vector_db_type: str = "pgvector"
-    record_manager_db_path: str = "sqlite:///record_manager_cache.sql"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

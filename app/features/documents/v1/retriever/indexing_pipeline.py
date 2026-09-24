@@ -4,32 +4,27 @@ This module converts source documents into chunked LangChain documents, stores t
 an SQL-backed record manager, and updates the vector index while tracking job status.
 """
 
-import gc
 import io
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
 
 import httpx
 import structlog
-from langchain_classic.indexes import SQLRecordManager, index
-from langchain_community.embeddings import FastEmbedEmbeddings
-from langchain_core.documents import Document
-from langchain_text_splitters import (
-    MarkdownHeaderTextSplitter,
-    RecursiveCharacterTextSplitter,
-)
+from llama_index.core import Document as LlamaDocument
+from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
+from llama_index.storage.docstore.postgres import PostgresDocumentStore
 from markitdown import MarkItDown
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database.session import sync_engine
 from app.features.documents.v1.models import IndexStatRecord
-from app.features.documents.v1.retriever.vector_db import sync_vector_store
+from app.features.documents.v1.retriever.vector_db import vector_store
 from app.features.documents.v1.schemas.enums import IndexingStatus
 
-KEY_ENCODER: Literal["sha256"] = "sha256"
 db_url = settings.sync_database_url.get_secret_value()
 
 TEXT_EXTENSIONS = {".md", ".txt", ".markdown", ".csv"}
@@ -39,20 +34,29 @@ vector_collection_name = settings.vector_collection_name
 vector_db_type = settings.vector_db_type
 
 
-headers_to_split_on = [
-    ("#", "Header_1"),
-    ("##", "Header_2"),
-    ("###", "Header_3"),
-]
-header_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+header_splitter = MarkdownNodeParser()
+text_splitter = SentenceSplitter(chunk_size=1000, chunk_overlap=150)
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000, chunk_overlap=150, separators=["\n\n", "\n|", "\n", " "]
+
+embeddings = FastEmbedEmbedding(model_name=embedding_model)
+markitdown = MarkItDown()
+
+from llama_index.storage.kvstore.postgres import PostgresKVStore
+
+# 1. Instantiate the underlying KV store directly
+kv_store = PostgresKVStore.from_uri(
+    uri=db_url,
+    table_name="ingestion_store",
 )
 
+# 2. Pass the kv_store instance into PostgresDocumentStore
+docstore = PostgresDocumentStore(postgres_kvstore=kv_store)
 
-embeddings = FastEmbedEmbeddings(model_name=embedding_model)
-markitdown = MarkItDown()
+pipeline = IngestionPipeline(
+    transformations=[header_splitter, text_splitter, embeddings],
+    vector_store=vector_store,
+    docstore=docstore,
+)
 
 
 def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
@@ -66,10 +70,7 @@ def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
     Args:
         job_id: Unique identifier for the indexing job tracked in the database.
     """
-    record_manager = SQLRecordManager(
-        namespace=f"{vector_db_type}/{vector_collection_name}", db_url=db_url
-    )
-    record_manager.create_schema()
+
     total_stats = {"num_added": 0, "num_updated": 0, "num_skipped": 0, "num_deleted": 0}
     active_sources: set[str] = set()
     documents_folder = settings.documents_folder
@@ -109,59 +110,29 @@ def sync_folder_to_vectordb(job_id: uuid.UUID) -> None:
                     result = markitdown.convert(file_path)
                     text_content = result.text_content
 
-                section_chunks = header_splitter.split_text(text_content)
+                base_doc = LlamaDocument(
+                    text=text_content,
+                    doc_id=source_id,
+                    extra_info={"source": source_id},
+                )
 
-                for section_chunk in section_chunks:
-                    metadata = section_chunk.metadata
-                    cleaned_metadata = {
-                        k: v
-                        for k, v in metadata.items()
-                        if isinstance(v, (str, int, float, bool))
-                    }
-                    cleaned_metadata["source"] = source_id
-                    section_chunk.metadata.update(cleaned_metadata)
+                existing_hash = docstore.get_document_hash(source_id)
+                pipeline.run(documents=[base_doc])
 
-                document_chunks = text_splitter.split_documents(section_chunks)
+                if existing_hash is None:
+                    total_stats["num_added"] += 1
+                elif existing_hash != base_doc.hash:
+                    total_stats["num_updated"] += 1
+                else:
+                    total_stats["num_skipped"] += 1
 
-                if document_chunks:
-                    stats = index(
-                        document_chunks,
-                        record_manager,
-                        sync_vector_store,
-                        cleanup="incremental",
-                        source_id_key="source",
-                        key_encoder=KEY_ENCODER,
-                    )
-                    for k in total_stats:
-                        total_stats[k] += cast(int, stats.get(k, 0))
-
-                del document_chunks
-                gc.collect()
-
-            # Identify deleted local files
-            all_tracked_keys = record_manager.list_keys(limit=10000)
-            all_tracked_sources = {
-                key.split(":")[0] for key in all_tracked_keys if ":" in key
-            }
-
-            for tracked_source in all_tracked_sources:
-                if (
-                    tracked_source.startswith("local:")
-                    and tracked_source not in active_sources
-                ):
-                    # Pass a dummy document targeted at source_id to trigger cleanup for deleted file
-                    dummy_doc = Document(
-                        page_content="", metadata={"source": tracked_source}
-                    )
-                    deletion_stats = index(
-                        [dummy_doc],
-                        record_manager=record_manager,
-                        vector_store=sync_vector_store,
-                        cleanup="incremental",
-                        source_id_key="source",
-                        key_encoder=KEY_ENCODER,
-                    )
-                    total_stats["num_deleted"] += deletion_stats.get("num_deleted", 0)
+            # Clean up deleted files
+            all_tracked_docs = docstore.get_all_document_hashes()
+            for document_hash, file_name in list(all_tracked_docs.items()):
+                if file_name not in active_sources:
+                    vector_store.delete(ref_doc_id=document_hash)
+                    docstore.delete_document(doc_id=document_hash)
+                    total_stats["num_deleted"] += 1
 
             # Save metrics
             new_job.num_added = total_stats["num_added"]
@@ -192,11 +163,6 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
     Args:
         job_id: Unique identifier for the GitHub indexing job tracked in the database.
     """
-    record_manager = SQLRecordManager(
-        namespace=f"{vector_db_type}/{vector_collection_name}",
-        db_url=db_url,
-    )
-    record_manager.create_schema()
 
     active_github_sources: set[str] = set()
     total_stats = {"num_added": 0, "num_updated": 0, "num_skipped": 0, "num_deleted": 0}
@@ -241,64 +207,33 @@ def sync_github_repo_to_vectordb(job_id: uuid.UUID) -> None:
 
                         file_bytes = io.BytesIO(file_response.content)
 
-                        result = markitdown.convert_stream(
+                        text_content = markitdown.convert_stream(
                             file_bytes, file_extension=file_extension
+                        ).text_content
+
+                        base_doc = LlamaDocument(
+                            text=text_content,
+                            doc_id=source_id,
+                            extra_info={"source": source_id, "github_sha": item["sha"]},
                         )
-                        section_chunks = header_splitter.split_text(result.text_content)
 
-                        for section_chunk in section_chunks:
-                            metadata = section_chunk.metadata
-                            cleaned_metadata = {
-                                k: v
-                                for k, v in metadata.items()
-                                if isinstance(v, (str, int, float, bool))
-                            }
-                            cleaned_metadata["source"] = source_id
-                            cleaned_metadata["github_sha"] = item["sha"]
+                        existing_hash = docstore.get_document_hash(source_id)
+                        pipeline.run(documents=[base_doc])
 
-                            section_chunk.metadata.update(cleaned_metadata)
+                        if existing_hash is None:
+                            total_stats["num_added"] += 1
+                        elif existing_hash != base_doc.hash:
+                            total_stats["num_updated"] += 1
+                        else:
+                            total_stats["num_skipped"] += 1
 
-                        document_chunks = text_splitter.split_documents(section_chunks)
-
-                        if document_chunks:
-                            stats = index(
-                                document_chunks,
-                                record_manager,
-                                sync_vector_store,
-                                cleanup="incremental",
-                                source_id_key="source",
-                                key_encoder=KEY_ENCODER,
-                            )
-                            for k in total_stats:
-                                total_stats[k] += cast(int, stats.get(k, 0))
-
-                        del result
-                        del document_chunks
-                        gc.collect()
-
-            # Handle deletion of removed GitHub files
-            all_tracked_keys = record_manager.list_keys(limit=10000)
-            all_tracked_sources = {
-                key.split(":")[0] for key in all_tracked_keys if ":" in key
-            }
-
-            for tracked_source in all_tracked_sources:
-                if (
-                    tracked_source.startswith("github:")
-                    and tracked_source not in active_github_sources
-                ):
-                    dummy_doc = Document(
-                        page_content="", metadata={"source": tracked_source}
-                    )
-                    deletion_stats = index(
-                        [dummy_doc],
-                        record_manager=record_manager,
-                        vector_store=sync_vector_store,
-                        cleanup="incremental",
-                        source_id_key="source",
-                        key_encoder=KEY_ENCODER,
-                    )
-                    total_stats["num_deleted"] += deletion_stats.get("num_deleted", 0)
+            # Clean up deleted files
+            all_tracked_docs = docstore.get_all_document_hashes()
+            for document_hash, file_name in list(all_tracked_docs.items()):
+                if file_name not in active_github_sources:
+                    vector_store.delete(ref_doc_id=document_hash)
+                    docstore.delete_document(doc_id=document_hash)
+                    total_stats["num_deleted"] += 1
 
             new_job.num_added = total_stats["num_added"]
             new_job.num_updated = total_stats["num_updated"]
